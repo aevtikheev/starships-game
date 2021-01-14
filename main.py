@@ -21,6 +21,7 @@ BORDER_LENGTH = 1
 
 coroutines = []
 obstacles = []
+obstacles_in_last_collisions = []
 
 
 async def sleep(tics=1):
@@ -102,6 +103,7 @@ async def draw_fire(canvas, start_row, start_column, rows_speed=-0.3, columns_sp
     while 0 < row < max_row and 0 < column < max_column:
         for obstacle in obstacles:
             if obstacle.has_collision(row, column):
+                obstacles_in_last_collisions.append(obstacle)
                 return
         canvas.addstr(round(row), round(column), symbol)
         await sleep()
@@ -166,6 +168,10 @@ async def fly_garbage(canvas, column, garbage_frame, speed=0.5):
             await sleep()
             draw_frame(canvas, row, column, garbage_frame, negative=True)
             row += speed
+
+            if obstacle in obstacles_in_last_collisions:
+                obstacles_in_last_collisions.remove(obstacle)
+                return
     finally:
         obstacles.remove(obstacle)
 
