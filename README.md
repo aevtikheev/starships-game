@@ -1,7 +1,7 @@
 # Simple text-based game about travel in space
-![Sample](https://github.com/aevtikheev/starships_game/docs/images/demo.gif)
-https://github.com/aevtikheev/starships_game
+![Sample](https://raw.githubusercontent.com/aevtikheev/starships_game/master/docs/images/demo.gif)
 ## How to launch
+Requires Python 3.8 or higher.
 
 `python main.py`
 
