@@ -3,8 +3,10 @@ import curses
 import time
 import random
 import os
+import itertools
 
 from tools import get_frame_size, draw_frame, read_frames, read_controls
+from physics import update_speed
 
 
 TIC_TIMEOUT = 0.1
@@ -104,34 +106,37 @@ async def draw_fire(canvas, start_row, start_column, rows_speed=-0.3, columns_sp
 
 async def draw_spaceship(canvas, start_row, start_column, spaceship_frames):
     """Display animation of a spaceship."""
-    tics_between_animations = 3
+    tics_between_animations = 2
 
     max_rows, max_columns = (x - BORDER_LENGTH for x in canvas.getmaxyx())
     min_rows = min_columns = BORDER_LENGTH
-
     row, column = start_row, start_column
-    while True:
+    row_speed = column_speed = 0
+
+    spaceship_animations_cycle = itertools.chain.from_iterable(
+        [[frame]*tics_between_animations for frame in spaceship_frames]
+    )
+
+    for spaceship_frame in itertools.cycle(spaceship_animations_cycle):
         rows_direction, columns_direction, _ = read_controls(canvas)
-        row = row + rows_direction
-        column = column + columns_direction
-        for spaceship_frame in spaceship_frames:
-            spaceship_size_rows, spaceship_size_columns = get_frame_size(spaceship_frame)
-            row = max(row, min_rows)
-            row = min(row, max_rows - spaceship_size_rows)
-            column = max(column, min_columns)
-            column = min(column, max_columns - spaceship_size_columns)
-            draw_frame(canvas, row, column, spaceship_frame)
-            await sleep(tics_between_animations)
-            draw_frame(canvas, row, column, spaceship_frame, negative=True)
+        row_speed, column_speed = update_speed(row_speed, column_speed, rows_direction, columns_direction)
+        row = row + row_speed
+        column = column + column_speed
+        spaceship_size_rows, spaceship_size_columns = get_frame_size(spaceship_frame)
+        row = max(row, min_rows)
+        row = min(row, max_rows - spaceship_size_rows)
+        column = max(column, min_columns)
+        column = min(column, max_columns - spaceship_size_columns)
+        draw_frame(canvas, row, column, spaceship_frame)
+        await sleep()
+        draw_frame(canvas, row, column, spaceship_frame, negative=True)
 
 
 async def fly_garbage(canvas, column, garbage_frame, speed=0.5):
     """Animate garbage, flying from top to bottom. Сolumn position will stay same, as specified on start."""
     rows_number, columns_number = canvas.getmaxyx()
-
     column = max(column, 0)
     column = min(column, columns_number - 1)
-
     row = 0
 
     while row < rows_number:
