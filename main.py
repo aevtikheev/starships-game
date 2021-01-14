@@ -19,28 +19,29 @@ BORDER_LENGTH = 1
 coroutines = []
 
 
+async def sleep(tics=1):
+    for _ in range(tics):
+        await asyncio.sleep(0)
+
+
 async def draw_star(canvas, row, column, symbol='*', offset_tics=0):
     tics_bold = 5
     tics_dim = 20
     tics_before_bold = 3
     tics_after_bold = 3
 
-    for _ in range(offset_tics):
-        canvas.addstr(row, column, symbol, curses.A_DIM)
-        await asyncio.sleep(0)
+    canvas.addstr(row, column, symbol, curses.A_DIM)
+    await sleep(offset_tics)
+
     while True:
-        for _ in range(tics_before_bold):
-            canvas.addstr(row, column, symbol)
-            await asyncio.sleep(0)
-        for _ in range(tics_bold):
-            canvas.addstr(row, column, symbol, curses.A_BOLD)
-            await asyncio.sleep(0)
-        for _ in range(tics_after_bold):
-            canvas.addstr(row, column, symbol)
-            await asyncio.sleep(0)
-        for _ in range(tics_dim):
-            canvas.addstr(row, column, symbol, curses.A_DIM)
-            await asyncio.sleep(0)
+        canvas.addstr(row, column, symbol)
+        await sleep(tics_before_bold)
+        canvas.addstr(row, column, symbol, curses.A_BOLD)
+        await sleep(tics_bold)
+        canvas.addstr(row, column, symbol)
+        await sleep(tics_after_bold)
+        canvas.addstr(row, column, symbol, curses.A_DIM)
+        await sleep(tics_dim)
 
 
 def create_stars(canvas, count):
@@ -71,8 +72,7 @@ async def fill_orbit_with_garbage(canvas, delay_tics):
                 garbage_frame=random.choice(garbage_frames)
             )
         )
-        for _ in range(delay_tics):
-            await asyncio.sleep(0)
+        await sleep(delay_tics)
 
 
 async def draw_fire(canvas, start_row, start_column, rows_speed=-0.3, columns_speed=0):
@@ -80,9 +80,9 @@ async def draw_fire(canvas, start_row, start_column, rows_speed=-0.3, columns_sp
     row, column = start_row, start_column
 
     canvas.addstr(round(row), round(column), '*')
-    await asyncio.sleep(0)
+    await sleep()
     canvas.addstr(round(row), round(column), 'O')
-    await asyncio.sleep(0)
+    await sleep()
     canvas.addstr(round(row), round(column), ' ')
 
     row += rows_speed
@@ -96,7 +96,7 @@ async def draw_fire(canvas, start_row, start_column, rows_speed=-0.3, columns_sp
 
     while 0 < row < max_row and 0 < column < max_column:
         canvas.addstr(round(row), round(column), symbol)
-        await asyncio.sleep(0)
+        await sleep()
         canvas.addstr(round(row), round(column), ' ')
         row += rows_speed
         column += columns_speed
@@ -120,10 +120,9 @@ async def draw_spaceship(canvas, start_row, start_column, spaceship_frames):
             row = min(row, max_rows - spaceship_size_rows)
             column = max(column, min_columns)
             column = min(column, max_columns - spaceship_size_columns)
-            for _ in range(tics_between_animations):
-                draw_frame(canvas, row, column, spaceship_frame)
-                await asyncio.sleep(0)
-                draw_frame(canvas, row, column, spaceship_frame, negative=True)
+            draw_frame(canvas, row, column, spaceship_frame)
+            await sleep(tics_between_animations)
+            draw_frame(canvas, row, column, spaceship_frame, negative=True)
 
 
 async def fly_garbage(canvas, column, garbage_frame, speed=0.5):
@@ -137,7 +136,7 @@ async def fly_garbage(canvas, column, garbage_frame, speed=0.5):
 
     while row < rows_number:
         draw_frame(canvas, row, column, garbage_frame)
-        await asyncio.sleep(0)
+        await sleep()
         draw_frame(canvas, row, column, garbage_frame, negative=True)
         row += speed
 
