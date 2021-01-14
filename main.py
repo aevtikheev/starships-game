@@ -9,9 +9,11 @@ from tools import get_frame_size, draw_frame, read_frames, read_controls
 from physics import update_speed
 from obstacles import Obstacle, show_obstacles
 from explosion import explode
+from game_scenario import PHRASES, get_garbage_delay_tics
 
 
 TIC_TIMEOUT = 0.1
+TICS_PER_YEAR = 20
 
 FRAMES_FOLDER = 'frames'
 SPACESHIP_FRAMES_FOLDER = os.path.join(FRAMES_FOLDER, 'spaceship')
@@ -19,6 +21,7 @@ GARBAGE_FRAMES_FOLDER = os.path.join(FRAMES_FOLDER, 'garbage')
 GAME_OVER_FRAME_FILE = os.path.join(FRAMES_FOLDER, 'game_over.txt')
 
 BORDER_LENGTH = 1
+CAPTION_WINDOW_LENGTH_PART = 3  # x means that caption window length is 1/x of the screen length.
 
 SHOW_OBSTACLES = False
 
@@ -26,14 +29,55 @@ SHOW_OBSTACLES = False
 coroutines = []
 obstacles = []
 obstacles_in_last_collisions = []
+year = 1957
 
 
 async def sleep(tics=1):
+    """Do nothing for a specified amount of tics."""
     for _ in range(tics):
         await asyncio.sleep(0)
 
 
+async def show_caption(canvas):
+    """Show scenario text in the bottom of the screen."""
+    global year
+
+    max_rows, max_columns = canvas.getmaxyx()
+    caption_window_nlines = 1 + BORDER_LENGTH * 2
+    caption_window_ncols = max_columns // CAPTION_WINDOW_LENGTH_PART
+    caption_window_begin_y = max_rows - BORDER_LENGTH - caption_window_nlines
+    caption_window_begin_x = max_columns // 2 - caption_window_ncols // 2
+
+    caption_window = canvas.derwin(
+        caption_window_nlines,
+        caption_window_ncols,
+        caption_window_begin_y,
+        caption_window_begin_x,
+    )
+
+    while True:
+        caption_text = f'Year {year}'
+        if year in PHRASES:
+            caption_text = caption_text + '. ' + PHRASES[year]
+
+        caption_row = 1
+        caption_column = caption_window_ncols // 2 - len(caption_text) // 2
+
+        draw_frame(caption_window, caption_row, caption_column, caption_text)
+        await sleep()
+        draw_frame(caption_window, caption_row, caption_column, caption_text, negative=True)
+
+
+async def handle_year(tics_per_year):
+    """Increase the game's year after a specified amount of tics."""
+    global year
+    while True:
+        await sleep(tics_per_year)
+        year += 1
+
+
 async def draw_star(canvas, row, column, symbol='*', offset_tics=0):
+    """Draw a single star."""
     tics_bold = 5
     tics_dim = 20
     tics_before_bold = 3
@@ -54,6 +98,7 @@ async def draw_star(canvas, row, column, symbol='*', offset_tics=0):
 
 
 def create_stars(canvas, count):
+    """Fill the screen with a specified amount of stars."""
     star_size = 1
     max_rows, max_columns = (max_coordinate - star_size - BORDER_LENGTH for max_coordinate in canvas.getmaxyx())
     min_rows = min_columns = BORDER_LENGTH
@@ -67,22 +112,58 @@ def create_stars(canvas, count):
         coroutines.append(draw_star(canvas, row, column, symbol, offset_blink))
 
 
-async def fill_orbit_with_garbage(canvas, delay_tics):
+async def fill_orbit_with_garbage(canvas):
+    """Fill screen with garbage. Garbage amount slowly increases by time."""
     garbage_frame_files = [
         os.path.join(GARBAGE_FRAMES_FOLDER, file) for file in os.listdir(GARBAGE_FRAMES_FOLDER)
     ]
     garbage_frames = read_frames(garbage_frame_files)
 
     global coroutines
+    global year
+
     while True:
-        coroutines.append(
-            fly_garbage(
-                canvas=canvas,
-                column=random.randint(0, canvas.getmaxyx()[1]),
-                garbage_frame=random.choice(garbage_frames)
+        delay_tics = get_garbage_delay_tics(year)
+        if delay_tics is not None:
+            coroutines.append(
+                fly_garbage(
+                    canvas=canvas,
+                    column=random.randint(0, canvas.getmaxyx()[1]),
+                    garbage_frame=random.choice(garbage_frames)
+                )
             )
-        )
-        await sleep(delay_tics)
+            await sleep(delay_tics)
+        else:
+            await sleep()
+
+
+async def fly_garbage(canvas, column, garbage_frame, speed=0.5):
+    """Animate garbage, flying from top to bottom. Сolumn position will stay same, as specified on start."""
+    rows_number, columns_number = canvas.getmaxyx()
+    column = max(column, 0)
+    column = min(column, columns_number - 1)
+    row = 0
+
+    garbage_frame_size_rows, garbage_frame_size_columns = get_frame_size(garbage_frame)
+    obstacle = Obstacle(row, column, garbage_frame_size_rows, garbage_frame_size_columns)
+    obstacles.append(obstacle)
+
+    try:
+        while row < rows_number:
+            obstacle.row = row
+            draw_frame(canvas, row, column, garbage_frame)
+            await sleep()
+            draw_frame(canvas, row, column, garbage_frame, negative=True)
+            row += speed
+
+            if obstacle in obstacles_in_last_collisions:
+                obstacles_in_last_collisions.remove(obstacle)
+                garbage_frame_center_row = row + garbage_frame_size_rows // 2
+                garbage_frame_center_column = column + garbage_frame_size_columns // 2
+                await explode(canvas, garbage_frame_center_row, garbage_frame_center_column)
+                return
+    finally:
+        obstacles.remove(obstacle)
 
 
 async def draw_fire(canvas, start_row, start_column, rows_speed=-0.3, columns_speed=0):
@@ -161,36 +242,8 @@ async def run_spaceship(canvas, start_row, start_column):
                 return
 
 
-async def fly_garbage(canvas, column, garbage_frame, speed=0.5):
-    """Animate garbage, flying from top to bottom. Сolumn position will stay same, as specified on start."""
-    rows_number, columns_number = canvas.getmaxyx()
-    column = max(column, 0)
-    column = min(column, columns_number - 1)
-    row = 0
-
-    garbage_frame_size_rows, garbage_frame_size_columns = get_frame_size(garbage_frame)
-    obstacle = Obstacle(row, column, garbage_frame_size_rows, garbage_frame_size_columns)
-    obstacles.append(obstacle)
-
-    try:
-        while row < rows_number:
-            obstacle.row = row
-            draw_frame(canvas, row, column, garbage_frame)
-            await sleep()
-            draw_frame(canvas, row, column, garbage_frame, negative=True)
-            row += speed
-
-            if obstacle in obstacles_in_last_collisions:
-                obstacles_in_last_collisions.remove(obstacle)
-                garbage_frame_center_row = row + garbage_frame_size_rows // 2
-                garbage_frame_center_column = column + garbage_frame_size_columns // 2
-                await explode(canvas, garbage_frame_center_row, garbage_frame_center_column)
-                return
-    finally:
-        obstacles.remove(obstacle)
-
-
 async def show_gameover(canvas):
+    """Show "Game Over" text in the center of the screen."""
     gameover_frame = read_frames([GAME_OVER_FRAME_FILE])[0]
     gameover_frame_size_rows, gameover_frame_size_columns = get_frame_size(gameover_frame)
     central_row, central_column = (x // 2 for x in canvas.getmaxyx())
@@ -222,7 +275,9 @@ def main(canvas):
         )
     )
 
-    coroutines.append(fill_orbit_with_garbage(canvas, delay_tics=20))
+    coroutines.append(fill_orbit_with_garbage(canvas))
+    coroutines.append(handle_year(TICS_PER_YEAR))
+    coroutines.append(show_caption(canvas))
     if SHOW_OBSTACLES:
         coroutines.append((show_obstacles(canvas, obstacles)))
 
