@@ -16,8 +16,11 @@ TIC_TIMEOUT = 0.1
 FRAMES_FOLDER = 'frames'
 SPACESHIP_FRAMES_FOLDER = os.path.join(FRAMES_FOLDER, 'spaceship')
 GARBAGE_FRAMES_FOLDER = os.path.join(FRAMES_FOLDER, 'garbage')
+GAME_OVER_FRAME_FILE = os.path.join(FRAMES_FOLDER, 'game_over.txt')
 
 BORDER_LENGTH = 1
+
+SHOW_OBSTACLES = False
 
 
 coroutines = []
@@ -113,7 +116,7 @@ async def draw_fire(canvas, start_row, start_column, rows_speed=-0.3, columns_sp
         column += columns_speed
 
 
-async def draw_spaceship(canvas, start_row, start_column):
+async def run_spaceship(canvas, start_row, start_column):
     """Display animation of a spaceship."""
     spaceship_frame_files = [
         os.path.join(SPACESHIP_FRAMES_FOLDER, file) for file in os.listdir(SPACESHIP_FRAMES_FOLDER)
@@ -151,6 +154,12 @@ async def draw_spaceship(canvas, start_row, start_column):
         await sleep()
         draw_frame(canvas, row, column, spaceship_frame, negative=True)
 
+        for obstacle in obstacles:
+            if obstacle.has_collision(row, column, spaceship_size_rows, spaceship_size_columns):
+                obstacles_in_last_collisions.append(obstacle)
+                coroutines.append(show_gameover(canvas))
+                return
+
 
 async def fly_garbage(canvas, column, garbage_frame, speed=0.5):
     """Animate garbage, flying from top to bottom. Сolumn position will stay same, as specified on start."""
@@ -181,6 +190,19 @@ async def fly_garbage(canvas, column, garbage_frame, speed=0.5):
         obstacles.remove(obstacle)
 
 
+async def show_gameover(canvas):
+    gameover_frame = read_frames([GAME_OVER_FRAME_FILE])[0]
+    gameover_frame_size_rows, gameover_frame_size_columns = get_frame_size(gameover_frame)
+    central_row, central_column = (x // 2 for x in canvas.getmaxyx())
+
+    row = central_row - gameover_frame_size_rows // 2
+    column = central_column - gameover_frame_size_columns // 2
+
+    while True:
+        draw_frame(canvas, row, column, gameover_frame)
+        await sleep()
+
+
 def main(canvas):
     canvas.border()
     canvas.nodelay(True)
@@ -193,7 +215,7 @@ def main(canvas):
 
     central_row, central_column = (x//2 for x in canvas.getmaxyx())
     coroutines.append(
-        draw_spaceship(
+        run_spaceship(
             canvas=canvas,
             start_row=central_row,
             start_column=central_column
@@ -201,7 +223,8 @@ def main(canvas):
     )
 
     coroutines.append(fill_orbit_with_garbage(canvas, delay_tics=20))
-    coroutines.append((show_obstacles(canvas, obstacles)))
+    if SHOW_OBSTACLES:
+        coroutines.append((show_obstacles(canvas, obstacles)))
 
     while True:
         for coroutine in coroutines:
