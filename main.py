@@ -118,7 +118,7 @@ async def draw_spaceship(canvas, start_row, start_column, spaceship_frames):
     )
 
     for spaceship_frame in itertools.cycle(spaceship_animations_cycle):
-        rows_direction, columns_direction, _ = read_controls(canvas)
+        rows_direction, columns_direction, fire = read_controls(canvas)
         row_speed, column_speed = update_speed(row_speed, column_speed, rows_direction, columns_direction)
         row = row + row_speed
         column = column + column_speed
@@ -127,6 +127,12 @@ async def draw_spaceship(canvas, start_row, start_column, spaceship_frames):
         row = min(row, max_rows - spaceship_size_rows)
         column = max(column, min_columns)
         column = min(column, max_columns - spaceship_size_columns)
+
+        if fire:
+            spaceship_center_column = column + spaceship_size_columns // 2
+            coroutines.append(
+                draw_fire(canvas, start_row=row, start_column=spaceship_center_column)
+            )
         draw_frame(canvas, row, column, spaceship_frame)
         await sleep()
         draw_frame(canvas, row, column, spaceship_frame, negative=True)
@@ -160,9 +166,6 @@ def main(canvas):
 
     central_row, central_column = (x//2 for x in canvas.getmaxyx())
 
-    coroutines.append(
-        draw_fire(canvas, start_row=central_row, start_column=central_column)
-    )
     coroutines.append(
         draw_spaceship(
             canvas=canvas,
