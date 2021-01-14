@@ -102,7 +102,9 @@ async def draw_star(canvas, row, column, symbol='*', offset_tics=0):
 def create_stars(canvas, count):
     """Fill the screen with a specified amount of stars."""
     star_size = 1
-    max_rows, max_columns = (max_coordinate - star_size - BORDER_LENGTH for max_coordinate in canvas.getmaxyx())
+    max_rows, max_columns = (
+        max_coordinate - star_size - BORDER_LENGTH for max_coordinate in canvas.getmaxyx()
+    )
     min_rows = min_columns = BORDER_LENGTH
 
     global coroutines
@@ -208,7 +210,7 @@ async def run_spaceship(canvas, start_row, start_column):
 
     tics_between_animations = 2
 
-    max_rows, max_columns = (x - BORDER_LENGTH for x in canvas.getmaxyx())
+    max_rows, max_columns = (max_coordinate - BORDER_LENGTH for max_coordinate in canvas.getmaxyx())
     min_rows = min_columns = BORDER_LENGTH
     row, column = start_row, start_column
     row_speed = column_speed = 0
@@ -219,7 +221,9 @@ async def run_spaceship(canvas, start_row, start_column):
 
     for spaceship_frame in itertools.cycle(spaceship_animations_cycle):
         rows_direction, columns_direction, fire_button_pressed = read_controls(canvas)
-        row_speed, column_speed = update_speed(row_speed, column_speed, rows_direction, columns_direction)
+        row_speed, column_speed = update_speed(
+            row_speed, column_speed, rows_direction, columns_direction
+        )
         row = row + row_speed
         column = column + column_speed
         spaceship_size_rows, spaceship_size_columns = get_frame_size(spaceship_frame)
@@ -248,7 +252,7 @@ async def show_gameover(canvas):
     """Show "Game Over" text in the center of the screen."""
     gameover_frame = read_frames([GAME_OVER_FRAME_FILE])[0]
     gameover_frame_size_rows, gameover_frame_size_columns = get_frame_size(gameover_frame)
-    central_row, central_column = (x // 2 for x in canvas.getmaxyx())
+    central_row, central_column = (max_coordinate // 2 for max_coordinate in canvas.getmaxyx())
 
     row = central_row - gameover_frame_size_rows // 2
     column = central_column - gameover_frame_size_columns // 2
@@ -268,7 +272,7 @@ def main(canvas):
 
     create_stars(canvas, count=100)
 
-    central_row, central_column = (x//2 for x in canvas.getmaxyx())
+    central_row, central_column = (max_coordinate//2 for max_coordinate in canvas.getmaxyx())
     coroutines.append(
         run_spaceship(
             canvas=canvas,
