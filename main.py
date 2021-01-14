@@ -7,18 +7,20 @@ import itertools
 
 from tools import get_frame_size, draw_frame, read_frames, read_controls
 from physics import update_speed
+from obstacles import Obstacle, has_collision, show_obstacles
 
 
 TIC_TIMEOUT = 0.1
 
 FRAMES_FOLDER = 'frames'
-ROCKET_FRAMES_FOLDER = 'rocket'
-GARBAGE_FRAMES_FOLDER = 'garbage'
+SPACESHIP_FRAMES_FOLDER = os.path.join(FRAMES_FOLDER, 'spaceship')
+GARBAGE_FRAMES_FOLDER = os.path.join(FRAMES_FOLDER, 'garbage')
 
 BORDER_LENGTH = 1
 
 
 coroutines = []
+obstacles = []
 
 
 async def sleep(tics=1):
@@ -61,8 +63,9 @@ def create_stars(canvas, count):
 
 
 async def fill_orbit_with_garbage(canvas, delay_tics):
-    garbage_frames_folder = os.path.join(FRAMES_FOLDER, GARBAGE_FRAMES_FOLDER)
-    garbage_frame_files = [os.path.join(garbage_frames_folder, file) for file in os.listdir(garbage_frames_folder)]
+    garbage_frame_files = [
+        os.path.join(GARBAGE_FRAMES_FOLDER, file) for file in os.listdir(GARBAGE_FRAMES_FOLDER)
+    ]
     garbage_frames = read_frames(garbage_frame_files)
 
     global coroutines
@@ -97,6 +100,9 @@ async def draw_fire(canvas, start_row, start_column, rows_speed=-0.3, columns_sp
     curses.beep()
 
     while 0 < row < max_row and 0 < column < max_column:
+        for obstacle in obstacles:
+            if obstacle.has_collision(row, column):
+                return
         canvas.addstr(round(row), round(column), symbol)
         await sleep()
         canvas.addstr(round(row), round(column), ' ')
@@ -104,8 +110,13 @@ async def draw_fire(canvas, start_row, start_column, rows_speed=-0.3, columns_sp
         column += columns_speed
 
 
-async def draw_spaceship(canvas, start_row, start_column, spaceship_frames):
+async def draw_spaceship(canvas, start_row, start_column):
     """Display animation of a spaceship."""
+    spaceship_frame_files = [
+        os.path.join(SPACESHIP_FRAMES_FOLDER, file) for file in os.listdir(SPACESHIP_FRAMES_FOLDER)
+    ]
+    spaceship_frames = read_frames(spaceship_frame_files)
+
     tics_between_animations = 2
 
     max_rows, max_columns = (x - BORDER_LENGTH for x in canvas.getmaxyx())
@@ -145,36 +156,42 @@ async def fly_garbage(canvas, column, garbage_frame, speed=0.5):
     column = min(column, columns_number - 1)
     row = 0
 
-    while row < rows_number:
-        draw_frame(canvas, row, column, garbage_frame)
-        await sleep()
-        draw_frame(canvas, row, column, garbage_frame, negative=True)
-        row += speed
+    obstacle = Obstacle(row, column, *get_frame_size(garbage_frame))
+    obstacles.append(obstacle)
+
+    try:
+        while row < rows_number:
+            obstacle.row = row
+            draw_frame(canvas, row, column, garbage_frame)
+            await sleep()
+            draw_frame(canvas, row, column, garbage_frame, negative=True)
+            row += speed
+    finally:
+        obstacles.remove(obstacle)
 
 
 def main(canvas):
-    rocket_frames_folder = os.path.join(FRAMES_FOLDER, ROCKET_FRAMES_FOLDER)
-    spaceship_frame_files = [os.path.join(rocket_frames_folder, file) for file in os.listdir(rocket_frames_folder)]
-    spaceship_frames = read_frames(spaceship_frame_files)
-
     canvas.border()
     canvas.nodelay(True)
     curses.curs_set(0)
 
     global coroutines
+    global obstacles
+
     create_stars(canvas, count=100)
 
     central_row, central_column = (x//2 for x in canvas.getmaxyx())
-
     coroutines.append(
         draw_spaceship(
             canvas=canvas,
             start_row=central_row,
-            start_column=central_column,
-            spaceship_frames=spaceship_frames
+            start_column=central_column
         )
     )
+
     coroutines.append(fill_orbit_with_garbage(canvas, delay_tics=20))
+    coroutines.append((show_obstacles(canvas, obstacles)))
+
     while True:
         for coroutine in coroutines:
             try:
