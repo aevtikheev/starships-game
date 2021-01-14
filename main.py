@@ -4,18 +4,19 @@ import time
 import random
 import os
 
+from tools import get_frame_size, draw_frame, read_frames, read_controls
+
+
 TIC_TIMEOUT = 0.1
 
-SPACE_KEY_CODE = 32
-LEFT_KEY_CODE = 260
-RIGHT_KEY_CODE = 261
-UP_KEY_CODE = 259
-DOWN_KEY_CODE = 258
-
 FRAMES_FOLDER = 'frames'
-ROCKET_FRAME_FILES = ('rocket_frame_1.txt', 'rocket_frame_2.txt')
+ROCKET_FRAMES_FOLDER = 'rocket'
+GARBAGE_FRAMES_FOLDER = 'garbage'
 
 BORDER_LENGTH = 1
+
+
+coroutines = []
 
 
 async def draw_star(canvas, row, column, symbol='*', offset_tics=0):
@@ -47,14 +48,31 @@ def create_stars(canvas, count):
     max_rows, max_columns = (max_coordinate - star_size - BORDER_LENGTH for max_coordinate in canvas.getmaxyx())
     min_rows = min_columns = BORDER_LENGTH
 
-    coroutines = []
+    global coroutines
     for _ in range(count):
         row = random.randint(min_rows, max_rows)
         column = random.randint(min_columns, max_columns)
         symbol = random.choice('+*.:')
         offset_blink = random.randint(1, 20)
         coroutines.append(draw_star(canvas, row, column, symbol, offset_blink))
-    return coroutines
+
+
+async def fill_orbit_with_garbage(canvas, delay_tics):
+    garbage_frames_folder = os.path.join(FRAMES_FOLDER, GARBAGE_FRAMES_FOLDER)
+    garbage_frame_files = [os.path.join(garbage_frames_folder, file) for file in os.listdir(garbage_frames_folder)]
+    garbage_frames = read_frames(garbage_frame_files)
+
+    global coroutines
+    while True:
+        coroutines.append(
+            fly_garbage(
+                canvas=canvas,
+                column=random.randint(0, canvas.getmaxyx()[1]),
+                garbage_frame=random.choice(garbage_frames)
+            )
+        )
+        for _ in range(delay_tics):
+            await asyncio.sleep(0)
 
 
 async def draw_fire(canvas, start_row, start_column, rows_speed=-0.3, columns_speed=0):
@@ -63,7 +81,6 @@ async def draw_fire(canvas, start_row, start_column, rows_speed=-0.3, columns_sp
 
     canvas.addstr(round(row), round(column), '*')
     await asyncio.sleep(0)
-
     canvas.addstr(round(row), round(column), 'O')
     await asyncio.sleep(0)
     canvas.addstr(round(row), round(column), ' ')
@@ -72,7 +89,6 @@ async def draw_fire(canvas, start_row, start_column, rows_speed=-0.3, columns_sp
     column += columns_speed
 
     symbol = '-' if columns_speed else '|'
-
     rows, columns = canvas.getmaxyx()
     max_row, max_column = rows - BORDER_LENGTH, columns - BORDER_LENGTH
 
@@ -110,98 +126,48 @@ async def draw_spaceship(canvas, start_row, start_column, spaceship_frames):
                 draw_frame(canvas, row, column, spaceship_frame, negative=True)
 
 
-def read_controls(canvas):
-    """Read keys pressed and returns tuple with controls state."""
-
-    rows_direction = columns_direction = 0
-    space_pressed = False
-
-    while True:
-        pressed_key_code = canvas.getch()
-
-        if pressed_key_code == -1:
-            # https://docs.python.org/3/library/curses.html#curses.window.getch
-            break
-
-        if pressed_key_code == UP_KEY_CODE:
-            rows_direction = -1
-
-        if pressed_key_code == DOWN_KEY_CODE:
-            rows_direction = 1
-
-        if pressed_key_code == RIGHT_KEY_CODE:
-            columns_direction = 1
-
-        if pressed_key_code == LEFT_KEY_CODE:
-            columns_direction = -1
-
-        if pressed_key_code == SPACE_KEY_CODE:
-            space_pressed = True
-
-    return rows_direction, columns_direction, space_pressed
-
-
-def draw_frame(canvas, start_row, start_column, text, negative=False):
-    """Draw multiline text fragment on canvas. Erase text instead of drawing if negative=True is specified."""
-
+async def fly_garbage(canvas, column, garbage_frame, speed=0.5):
+    """Animate garbage, flying from top to bottom. Сolumn position will stay same, as specified on start."""
     rows_number, columns_number = canvas.getmaxyx()
 
-    for row, line in enumerate(text.splitlines(), round(start_row)):
-        if row < 0:
-            continue
+    column = max(column, 0)
+    column = min(column, columns_number - 1)
 
-        if row >= rows_number:
-            break
+    row = 0
 
-        for column, symbol in enumerate(line, round(start_column)):
-            if column < 0:
-                continue
-
-            if column >= columns_number:
-                break
-
-            if symbol == ' ':
-                continue
-
-            # Check that current position it is not in a lower right corner of the window
-            # Curses will raise exception in that case. Don`t ask why…
-            # https://docs.python.org/3/library/curses.html#curses.window.addch
-            if row == rows_number - 1 and column == columns_number - 1:
-                continue
-
-            symbol = symbol if not negative else ' '
-            canvas.addch(row, column, symbol)
-
-
-def get_frame_size(text):
-    """Calculate size of multiline text fragment. Returns pair (rows number, colums number)"""
-    lines = text.splitlines()
-    rows = len(lines)
-    columns = max([len(line) for line in lines])
-
-    return rows, columns
-
-
-def read_spaceship_frames(frame_file_paths):
-    frames = []
-    for frame_file_path in frame_file_paths:
-        with open(frame_file_path, 'r') as frame_file:
-            frames.append(frame_file.read())
-    return frames
+    while row < rows_number:
+        draw_frame(canvas, row, column, garbage_frame)
+        await asyncio.sleep(0)
+        draw_frame(canvas, row, column, garbage_frame, negative=True)
+        row += speed
 
 
 def main(canvas):
-    rocket_frames = read_spaceship_frames(
-        os.path.join(FRAMES_FOLDER, f) for f in ROCKET_FRAME_FILES
-    )
+    rocket_frames_folder = os.path.join(FRAMES_FOLDER, ROCKET_FRAMES_FOLDER)
+    spaceship_frame_files = [os.path.join(rocket_frames_folder, file) for file in os.listdir(rocket_frames_folder)]
+    spaceship_frames = read_frames(spaceship_frame_files)
+
     canvas.border()
     canvas.nodelay(True)
     curses.curs_set(0)
-    coroutines = create_stars(canvas, count=100)
+
+    global coroutines
+    create_stars(canvas, count=100)
+
     central_row, central_column = (x//2 for x in canvas.getmaxyx())
-    coroutines.append(draw_fire(canvas, start_row=central_row, start_column=central_column))
-    coroutines.append(draw_spaceship(canvas=canvas, start_row=central_row,
-                                     start_column=central_column, spaceship_frames=rocket_frames))
+
+    coroutines.append(
+        draw_fire(canvas, start_row=central_row, start_column=central_column)
+    )
+    coroutines.append(
+        draw_spaceship(
+            canvas=canvas,
+            start_row=central_row,
+            start_column=central_column,
+            spaceship_frames=spaceship_frames
+        )
+    )
+    coroutines.append(fill_orbit_with_garbage(canvas, delay_tics=20))
     while True:
         for coroutine in coroutines:
             try:
