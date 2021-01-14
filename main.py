@@ -23,6 +23,8 @@ GAME_OVER_FRAME_FILE = os.path.join(FRAMES_FOLDER, 'game_over.txt')
 BORDER_LENGTH = 1
 CAPTION_WINDOW_LENGTH_PART = 3  # x means that caption window length is 1/x of the screen length.
 
+GUN_AVAILABLE_YEAR = 2020
+
 SHOW_OBSTACLES = False
 
 
@@ -216,7 +218,7 @@ async def run_spaceship(canvas, start_row, start_column):
     )
 
     for spaceship_frame in itertools.cycle(spaceship_animations_cycle):
-        rows_direction, columns_direction, fire = read_controls(canvas)
+        rows_direction, columns_direction, fire_button_pressed = read_controls(canvas)
         row_speed, column_speed = update_speed(row_speed, column_speed, rows_direction, columns_direction)
         row = row + row_speed
         column = column + column_speed
@@ -226,7 +228,7 @@ async def run_spaceship(canvas, start_row, start_column):
         column = max(column, min_columns)
         column = min(column, max_columns - spaceship_size_columns)
 
-        if fire:
+        if fire_button_pressed and year >= GUN_AVAILABLE_YEAR:
             spaceship_center_column = column + spaceship_size_columns // 2
             coroutines.append(
                 draw_fire(canvas, start_row=row, start_column=spaceship_center_column)
