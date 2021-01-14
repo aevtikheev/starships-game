@@ -7,7 +7,8 @@ import itertools
 
 from tools import get_frame_size, draw_frame, read_frames, read_controls
 from physics import update_speed
-from obstacles import Obstacle, has_collision, show_obstacles
+from obstacles import Obstacle, show_obstacles
+from explosion import explode
 
 
 TIC_TIMEOUT = 0.1
@@ -158,7 +159,8 @@ async def fly_garbage(canvas, column, garbage_frame, speed=0.5):
     column = min(column, columns_number - 1)
     row = 0
 
-    obstacle = Obstacle(row, column, *get_frame_size(garbage_frame))
+    garbage_frame_size_rows, garbage_frame_size_columns = get_frame_size(garbage_frame)
+    obstacle = Obstacle(row, column, garbage_frame_size_rows, garbage_frame_size_columns)
     obstacles.append(obstacle)
 
     try:
@@ -171,6 +173,9 @@ async def fly_garbage(canvas, column, garbage_frame, speed=0.5):
 
             if obstacle in obstacles_in_last_collisions:
                 obstacles_in_last_collisions.remove(obstacle)
+                garbage_frame_center_row = row + garbage_frame_size_rows // 2
+                garbage_frame_center_column = column + garbage_frame_size_columns // 2
+                await explode(canvas, garbage_frame_center_row, garbage_frame_center_column)
                 return
     finally:
         obstacles.remove(obstacle)
